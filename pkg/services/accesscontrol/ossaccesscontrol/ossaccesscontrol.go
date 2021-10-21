@@ -69,8 +69,8 @@ func (ac *OSSAccessControlService) Evaluate(ctx context.Context, user *models.Si
 		return false, err
 	}
 
-	// TODO Provide DB
-	resolvedEvaluator, err := ac.scopeResolver.ResolveAttribute(ctx, user, nil, evaluator)
+	attributeMutator := ac.scopeResolver.GetResolveAttributeScopeMutator(user.OrgId)
+	resolvedEvaluator, err := evaluator.MutateScopes(ctx, attributeMutator)
 	if err != nil {
 		return false, err
 	}
@@ -81,6 +81,13 @@ func (ac *OSSAccessControlService) Evaluate(ctx context.Context, user *models.Si
 // GetUserRoles returns user permissions based on built-in roles
 func (ac *OSSAccessControlService) GetUserRoles(ctx context.Context, user *models.SignedInUser) ([]*accesscontrol.RoleDTO, error) {
 	return nil, errors.New("unsupported function") //OSS users will continue to use builtin roles via GetUserPermissions
+}
+
+func (ac *OSSAccessControlService) resolveScopeKeyword(ctx context.Context, user *models.SignedInUser, p accesscontrol.Permission) (*accesscontrol.Permission, error) {
+	var err error
+	keywordModifier := ac.scopeResolver.GetResolveKeywordScopeMutator(user)
+	p.Scope, err = keywordModifier(ctx, p.Scope)
+	return &p, err
 }
 
 // GetUserPermissions returns user permissions based on built-in roles
@@ -99,7 +106,7 @@ func (ac *OSSAccessControlService) GetUserPermissions(ctx context.Context, user 
 				}
 				for _, p := range role.Permissions {
 					// if the permission has a keyword in its scope it will be resolved
-					permission, err := ac.scopeResolver.ResolveKeyword(user, p)
+					permission, err := ac.resolveScopeKeyword(ctx, user, p)
 					if err != nil {
 						return nil, err
 					}
