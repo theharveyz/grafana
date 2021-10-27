@@ -58,6 +58,7 @@ func TestResolveKeywordedScope(t *testing.T) {
 }
 
 func TestScopeResolver_ResolveAttribute(t *testing.T) {
+	// Calls allow us to see how many times the fakeDataSourceResolution has been called
 	calls := 0
 	fakeDataSourceResolution := func(ctx context.Context, orgID int64, initialScope string) (string, error) {
 		calls++
@@ -74,29 +75,29 @@ func TestScopeResolver_ResolveAttribute(t *testing.T) {
 		name          string
 		orgID         int64
 		evaluator     Evaluator
-		expectedCalls int
-		want          Evaluator
+		wantEvaluator Evaluator
+		wantCalls     int
 		wantErr       error
 	}{
 		{
 			name:          "should work with scope less permissions",
 			evaluator:     EvalPermission("datasources:read"),
-			want:          EvalPermission("datasources:read"),
-			expectedCalls: 0,
+			wantEvaluator: EvalPermission("datasources:read"),
+			wantCalls:     0,
 		},
 		{
-			name:          "should handle an error",
-			orgID:         1,
-			evaluator:     EvalPermission("datasources:read", Scope("datasources", "name", "testds3")),
-			wantErr:       models.ErrDataSourceNotFound,
-			expectedCalls: 1,
+			name:      "should handle an error",
+			orgID:     1,
+			evaluator: EvalPermission("datasources:read", Scope("datasources", "name", "testds3")),
+			wantErr:   models.ErrDataSourceNotFound,
+			wantCalls: 1,
 		},
 		{
 			name:          "should resolve a scope",
 			orgID:         1,
 			evaluator:     EvalPermission("datasources:read", Scope("datasources", "name", "testds")),
-			want:          EvalPermission("datasources:read", Scope("datasources", "id", "1")),
-			expectedCalls: 1,
+			wantEvaluator: EvalPermission("datasources:read", Scope("datasources", "id", "1")),
+			wantCalls:     1,
 		},
 		{
 			name:  "should resolve nested scopes with cache",
@@ -108,21 +109,25 @@ func TestScopeResolver_ResolveAttribute(t *testing.T) {
 					EvalPermission("datasources:read", Scope("datasources", "name", "testds2")),
 				),
 			),
-			want: EvalAll(
+			wantEvaluator: EvalAll(
 				EvalPermission("datasources:read", Scope("datasources", "id", "1")),
 				EvalAny(
 					EvalPermission("datasources:read", Scope("datasources", "id", "1")),
 					EvalPermission("datasources:read", Scope("datasources", "id", "2")),
 				),
 			),
-			expectedCalls: 2,
+			wantCalls: 2,
 		},
 	}
 	for _, tt := range tests {
 		resolver := NewScopeResolver()
+
+		// Reset calls counter
 		calls = 0
+		// Register a resolution method
 		resolver.AddAttributeResolver("datasources:name:", fakeDataSourceResolution)
 
+		// Test
 		scopeModifier := resolver.GetResolveAttributeScopeMutator(tt.orgID)
 		resolvedEvaluator, err := tt.evaluator.MutateScopes(context.TODO(), scopeModifier)
 		if tt.wantErr != nil {
@@ -130,9 +135,9 @@ func TestScopeResolver_ResolveAttribute(t *testing.T) {
 			return
 		}
 		assert.NoError(t, err)
-		assert.EqualValues(t, tt.want, resolvedEvaluator, "permission did not match expected resolution")
+		assert.EqualValues(t, tt.wantEvaluator, resolvedEvaluator, "permission did not match expected resolution")
 
-		assert.Equal(t, tt.expectedCalls, calls, "cache has not been used")
+		assert.Equal(t, tt.wantCalls, calls, "cache has not been used")
 	}
 }
 
