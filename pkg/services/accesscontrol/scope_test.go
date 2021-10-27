@@ -2,12 +2,9 @@ package accesscontrol
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/grafana/grafana/pkg/models"
-	"github.com/grafana/grafana/pkg/services/sqlstore"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -60,94 +57,82 @@ func TestResolveKeywordedScope(t *testing.T) {
 	}
 }
 
-func newTestDatasourceNameScopeResolver(db *sqlstore.SQLStore) (string, AttributeScopeResolveFunc) {
-	dsNameResolver := func(ctx context.Context, orgID int64, initialScope string) (string, error) {
-		dsName := strings.Split(initialScope, ":")[2]
-
-		query := models.GetDataSourceQuery{Name: dsName, OrgId: orgID}
-		if err := db.GetDataSource(ctx, &query); err != nil {
-			return "", err
-		}
-
-		return Scope("datasources", "id", fmt.Sprintf("%v", query.Result.Id)), nil
-	}
-	return "datasources:name:", dsNameResolver
-}
-
 func TestScopeResolver_ResolveAttribute(t *testing.T) {
-	testdscmd := &models.AddDataSourceCommand{
-		Uid:    "testUID",
-		OrgId:  1,
-		Name:   "testds",
-		Url:    "http://localhost:5432",
-		Type:   "postgresql",
-		Access: "Proxy",
+	calls := 0
+	fakeDataSourceResolution := func(ctx context.Context, orgID int64, initialScope string) (string, error) {
+		calls++
+		if initialScope == "datasources:name:testds" {
+			return Scope("datasources", "id", "1"), nil
+		} else if initialScope == "datasources:name:testds2" {
+			return Scope("datasources", "id", "2"), nil
+		} else {
+			return "", models.ErrDataSourceNotFound
+		}
 	}
 
 	tests := []struct {
-		name      string
-		orgID     int64
-		initDB    func(t *testing.T, db *sqlstore.SQLStore)
-		evaluator Evaluator
-		want      Evaluator
-		wantErr   bool
+		name          string
+		orgID         int64
+		evaluator     Evaluator
+		expectedCalls int
+		want          Evaluator
+		wantErr       error
 	}{
 		{
-			name:      "no resolution evaluator",
-			evaluator: EvalPermission("datasources:read"),
-			want:      EvalPermission("datasources:read"),
+			name:          "should work with scope less permissions",
+			evaluator:     EvalPermission("datasources:read"),
+			want:          EvalPermission("datasources:read"),
+			expectedCalls: 0,
 		},
 		{
-			name:  "datasource name resolution evaluator",
-			orgID: 1,
-			initDB: func(t *testing.T, db *sqlstore.SQLStore) {
-				err := db.AddDataSource(context.Background(), testdscmd)
-				assert.NoError(t, err)
-			},
-			evaluator: EvalPermission("datasources:read", Scope("datasources", "name", "testds")),
-			want:      EvalPermission("datasources:read", Scope("datasources", "id", "1")),
-			wantErr:   false,
+			name:          "should handle an error",
+			orgID:         1,
+			evaluator:     EvalPermission("datasources:read", Scope("datasources", "name", "testds3")),
+			wantErr:       models.ErrDataSourceNotFound,
+			expectedCalls: 1,
 		},
 		{
-			name:  "datasource name resolution evaluator",
+			name:          "should resolve a scope",
+			orgID:         1,
+			evaluator:     EvalPermission("datasources:read", Scope("datasources", "name", "testds")),
+			want:          EvalPermission("datasources:read", Scope("datasources", "id", "1")),
+			expectedCalls: 1,
+		},
+		{
+			name:  "should resolve nested scopes with cache",
 			orgID: 1,
-			initDB: func(t *testing.T, db *sqlstore.SQLStore) {
-				err := db.AddDataSource(context.Background(), testdscmd)
-				assert.NoError(t, err)
-			},
 			evaluator: EvalAll(
 				EvalPermission("datasources:read", Scope("datasources", "name", "testds")),
 				EvalAny(
 					EvalPermission("datasources:read", Scope("datasources", "name", "testds")),
-					EvalPermission("datasources:read", Scope("datasources", "name", "testds")),
+					EvalPermission("datasources:read", Scope("datasources", "name", "testds2")),
 				),
 			),
 			want: EvalAll(
 				EvalPermission("datasources:read", Scope("datasources", "id", "1")),
 				EvalAny(
 					EvalPermission("datasources:read", Scope("datasources", "id", "1")),
-					EvalPermission("datasources:read", Scope("datasources", "id", "1")),
+					EvalPermission("datasources:read", Scope("datasources", "id", "2")),
 				),
 			),
-			wantErr: false,
+			expectedCalls: 2,
 		},
 	}
 	for _, tt := range tests {
-		db := sqlstore.InitTestDB(t)
 		resolver := NewScopeResolver()
-		resolver.AddAttributeResolver(newTestDatasourceNameScopeResolver(db))
+		calls = 0
+		resolver.AddAttributeResolver("datasources:name:", fakeDataSourceResolution)
 
-		if tt.initDB != nil {
-			tt.initDB(t, db)
-		}
 		scopeModifier := resolver.GetResolveAttributeScopeMutator(tt.orgID)
 		resolvedEvaluator, err := tt.evaluator.MutateScopes(context.TODO(), scopeModifier)
-		if tt.wantErr {
-			assert.Error(t, err, "expected an error during the resolution of the scope")
+		if tt.wantErr != nil {
+			assert.ErrorAs(t, err, &tt.wantErr, "expected an error during the resolution of the scope")
 			return
 		}
 		assert.NoError(t, err)
 		assert.EqualValues(t, tt.want, resolvedEvaluator, "permission did not match expected resolution")
+
+		assert.Equal(t, tt.expectedCalls, calls, "cache has not been used")
 	}
 }
 

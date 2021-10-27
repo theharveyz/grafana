@@ -92,7 +92,7 @@ func (s *ScopeResolver) GetResolveKeywordScopeMutator(user *models.SignedInUser)
 		if fn, ok := s.keywordResolvers[scope]; ok {
 			resolvedScope, err = fn(user)
 			if err != nil {
-				return "", fmt.Errorf("could not resolve %v: %v", scope, err)
+				return "", fmt.Errorf("could not resolve %v: %w", scope, err)
 			}
 			s.log.Debug("resolved '%v' to '%v'", scope, resolvedScope)
 		}
@@ -124,7 +124,7 @@ func (s *ScopeResolver) GetResolveAttributeScopeMutator(orgID int64) ScopeMutato
 		if fn, ok := s.attributeResolvers[prefix]; ok {
 			resolvedScope, err = fn(ctx, orgID, scope)
 			if err != nil {
-				return "", fmt.Errorf("could not resolve %v: %v", scope, err)
+				return "", fmt.Errorf("could not resolve %v: %w", scope, err)
 			}
 			// Cache result
 			s.cache.Set(getCacheKey(orgID, scope), resolvedScope, gocache.DefaultExpiration)
