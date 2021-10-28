@@ -65,7 +65,7 @@ func NewScopeResolver() ScopeResolver {
 		},
 		attributeResolvers: map[string]AttributeScopeResolveFunc{},
 		cache:              localcache.New(ttl, cleanInterval),
-		log:                log.New("accesscontrol-scope"),
+		log:                log.New("accesscontrol.scoperesolution"),
 	}
 }
 
