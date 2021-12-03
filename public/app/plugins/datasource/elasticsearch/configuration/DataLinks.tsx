@@ -11,9 +11,6 @@ const getStyles = (theme: GrafanaTheme2) => {
       padding-bottom: ${theme.spacing(2)};
       color: ${theme.colors.text.secondary};
     `,
-    dataLink: css`
-      margin-bottom: ${theme.spacing(1)};
-    `,
   };
 };
 
@@ -38,7 +35,6 @@ export const DataLinks = (props: Props) => {
           {value.map((field, index) => {
             return (
               <DataLink
-                className={styles.dataLink}
                 key={index}
                 value={field}
                 onChange={(newField) => {

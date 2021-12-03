@@ -1,44 +1,21 @@
-import React, { Dispatch, SetStateAction, useEffect, useState } from 'react';
-import { css } from '@emotion/css';
+import React, { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
 import { VariableSuggestion } from '@grafana/data';
 import { DataSourcePicker } from '@grafana/runtime';
-import { Button, LegacyForms, DataLinkInput } from '@grafana/ui';
-const { FormField, Switch } = LegacyForms;
+import { Button, DataLinkInput, InlineField, InlineFieldRow, Input, InlineSwitch } from '@grafana/ui';
 import { DataLinkConfig } from '../types';
 import { usePrevious } from 'react-use';
-
-const styles = {
-  firstRow: css`
-    display: flex;
-  `,
-  nameField: css`
-    flex: 2;
-  `,
-  regexField: css`
-    flex: 3;
-  `,
-  row: css`
-    display: flex;
-    align-items: baseline;
-  `,
-  urlField: css`
-    flex: 1;
-  `,
-  urlDisplayLabelField: css`
-    flex: 1;
-  `,
-};
+import { uniqueId } from 'lodash';
 
 type Props = {
   value: DataLinkConfig;
   onChange: (value: DataLinkConfig) => void;
   onDelete: () => void;
   suggestions: VariableSuggestion[];
-  className?: string;
 };
 export const DataLink = (props: Props) => {
-  const { value, onChange, onDelete, suggestions, className } = props;
+  const { value, onChange, onDelete, suggestions } = props;
   const [showInternalLink, setShowInternalLink] = useInternalLink(value.datasourceUid);
+  const { current: baseId } = useRef(uniqueId('es-datalink-'));
 
   const handleChange = (field: keyof typeof value) => (event: React.ChangeEvent<HTMLInputElement>) => {
     onChange({
@@ -48,75 +25,60 @@ export const DataLink = (props: Props) => {
   };
 
   return (
-    <div className={className}>
-      <div className={styles.firstRow + ' gf-form'}>
-        <FormField
-          className={styles.nameField}
-          labelWidth={6}
-          // A bit of a hack to prevent using default value for the width from FormField
-          inputWidth={null}
+    <>
+      <InlineFieldRow>
+        <InlineField
           label="Field"
-          type="text"
-          value={value.field}
-          tooltip={'Can be exact field name or a regex pattern that will match on the field name.'}
-          onChange={handleChange('field')}
-        />
-        <Button
-          variant={'destructive'}
-          title="Remove field"
-          icon="times"
-          onClick={(event) => {
-            event.preventDefault();
-            onDelete();
-          }}
-        />
-      </div>
-      <div className="gf-form">
-        <FormField
-          label={showInternalLink ? 'Query' : 'URL'}
-          labelWidth={6}
-          inputEl={
-            <DataLinkInput
-              placeholder={showInternalLink ? '${__value.raw}' : 'http://example.com/${__value.raw}'}
-              value={value.url || ''}
-              onChange={(newValue) =>
-                onChange({
-                  ...value,
-                  url: newValue,
-                })
-              }
-              suggestions={suggestions}
-            />
-          }
-          className={styles.urlField}
-        />
-        <FormField
-          className={styles.urlDisplayLabelField}
-          inputWidth={null}
-          label="URL Label"
-          type="text"
-          value={value.urlDisplayLabel}
-          onChange={handleChange('urlDisplayLabel')}
-          tooltip={'Use to override the button label.'}
-        />
-      </div>
+          tooltip="Can be exact field name or a regex pattern that will match on the field name."
+          labelWidth={12}
+          grow
+        >
+          <Input id={`${baseId}-field`} value={value.field} onChange={handleChange('field')} />
+        </InlineField>
+        <Button variant="destructive" aria-label="Remove field" icon="times" type="button" onClick={onDelete} />
+      </InlineFieldRow>
 
-      <div className={styles.row}>
-        <Switch
-          labelClass={'width-6'}
-          label="Internal link"
-          checked={showInternalLink}
-          onChange={() => {
-            if (showInternalLink) {
+      <InlineFieldRow>
+        <InlineField
+          label={showInternalLink ? 'Query' : 'URL'}
+          tooltip="Can be exact field name or a regex pattern that will match on the field name."
+          labelWidth={12}
+          grow
+        >
+          <DataLinkInput
+            placeholder={showInternalLink ? '${__value.raw}' : 'http://example.com/${__value.raw}'}
+            value={value.url || ''}
+            onChange={(newValue) =>
               onChange({
                 ...value,
-                datasourceUid: undefined,
-              });
+                url: newValue,
+              })
             }
-            setShowInternalLink(!showInternalLink);
-          }}
-        />
+            suggestions={suggestions}
+          />
+        </InlineField>
 
+        <InlineField label="URL Label" tooltip="Use to override the button label." labelWidth={12}>
+          <Input id={`${baseId}-url-label`} value={value.urlDisplayLabel} onChange={handleChange('urlDisplayLabel')} />
+        </InlineField>
+      </InlineFieldRow>
+
+      <InlineFieldRow>
+        <InlineField labelWidth={12} label="Internal Link">
+          <InlineSwitch
+            id={`${baseId}-internal-link`}
+            checked={showInternalLink}
+            onChange={() => {
+              if (showInternalLink) {
+                onChange({
+                  ...value,
+                  datasourceUid: undefined,
+                });
+              }
+              setShowInternalLink(!showInternalLink);
+            }}
+          />
+        </InlineField>
         {showInternalLink && (
           <DataSourcePicker
             tracing={true}
@@ -130,8 +92,8 @@ export const DataLink = (props: Props) => {
             current={value.datasourceUid}
           />
         )}
-      </div>
-    </div>
+      </InlineFieldRow>
+    </>
   );
 };
 
