@@ -2,12 +2,12 @@ import React, { Dispatch, SetStateAction, useEffect, useState } from 'react';
 import { css } from '@emotion/css';
 import { VariableSuggestion } from '@grafana/data';
 import { DataSourcePicker } from '@grafana/runtime';
-import { Button, LegacyForms, DataLinkInput, stylesFactory } from '@grafana/ui';
+import { Button, LegacyForms, DataLinkInput } from '@grafana/ui';
 const { FormField, Switch } = LegacyForms;
 import { DataLinkConfig } from '../types';
 import { usePrevious } from 'react-use';
 
-const getStyles = stylesFactory(() => ({
+const styles = {
   firstRow: css`
     display: flex;
   `,
@@ -27,7 +27,7 @@ const getStyles = stylesFactory(() => ({
   urlDisplayLabelField: css`
     flex: 1;
   `,
-}));
+};
 
 type Props = {
   value: DataLinkConfig;
@@ -38,7 +38,6 @@ type Props = {
 };
 export const DataLink = (props: Props) => {
   const { value, onChange, onDelete, suggestions, className } = props;
-  const styles = getStyles();
   const [showInternalLink, setShowInternalLink] = useInternalLink(value.datasourceUid);
 
   const handleChange = (field: keyof typeof value) => (event: React.ChangeEvent<HTMLInputElement>) => {
