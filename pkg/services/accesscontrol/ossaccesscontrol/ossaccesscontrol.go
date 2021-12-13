@@ -83,17 +83,13 @@ func (ac *OSSAccessControlService) GetUserRoles(ctx context.Context, user *model
 	return nil, errors.New("unsupported function") //OSS users will continue to use builtin roles via GetUserPermissions
 }
 
-func (ac *OSSAccessControlService) resolveScopeKeyword(ctx context.Context, user *models.SignedInUser, p accesscontrol.Permission) (*accesscontrol.Permission, error) {
-	var err error
-	keywordModifier := ac.scopeResolver.GetResolveKeywordScopeMutator(user)
-	p.Scope, err = keywordModifier(ctx, p.Scope)
-	return &p, err
-}
-
 // GetUserPermissions returns user permissions based on built-in roles
 func (ac *OSSAccessControlService) GetUserPermissions(ctx context.Context, user *models.SignedInUser) ([]*accesscontrol.Permission, error) {
 	timer := prometheus.NewTimer(metrics.MAccessPermissionsSummary)
 	defer timer.ObserveDuration()
+
+	var err error
+	keywordMutator := ac.scopeResolver.GetResolveKeywordScopeMutator(user)
 
 	builtinRoles := ac.GetUserBuiltInRoles(user)
 	permissions := make([]*accesscontrol.Permission, 0)
@@ -104,13 +100,14 @@ func (ac *OSSAccessControlService) GetUserPermissions(ctx context.Context, user 
 				if !exists {
 					continue
 				}
-				for _, p := range role.Permissions {
+				for i := range role.Permissions {
 					// if the permission has a keyword in its scope it will be resolved
-					permission, err := ac.resolveScopeKeyword(ctx, user, p)
+					p := (role.Permissions[i])
+					p.Scope, err = keywordMutator(ctx, p.Scope)
 					if err != nil {
 						return nil, err
 					}
-					permissions = append(permissions, permission)
+					permissions = append(permissions, &p)
 				}
 			}
 		}
