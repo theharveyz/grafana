@@ -5,6 +5,7 @@
   "category": "tsdb",
 
   "defaultMatchFormat": "regex values",
+  "backend": true,
   "metrics": true,
   "logs": true,
   "annotations": true,

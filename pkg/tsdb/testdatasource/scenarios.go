@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
+
 	"github.com/grafana/grafana/pkg/components/simplejson"
 	"github.com/grafana/grafana/pkg/util/errutil"
 )
@@ -55,7 +57,7 @@ type Scenario struct {
 	handler     backend.QueryDataHandlerFunc
 }
 
-func (s *Service) registerScenarios() {
+func (s *Service) registerDataRoutes() {
 	s.registerScenario(&Scenario{
 		ID:      string(exponentialHeatmapBucketDataQuery),
 		Name:    "Exponential heatmap bucket data",
@@ -210,12 +212,16 @@ Timestamps will line up evenly on timeStepSeconds (For example, 60 seconds means
 		handler: s.handleCsvContentScenario,
 	})
 
-	s.queryMux.HandleFunc("", s.handleFallbackScenario)
+	s.dataMux.HandleFunc("", s.handleFallbackScenario)
 }
 
 func (s *Service) registerScenario(scenario *Scenario) {
+	if s.dataMux == nil {
+		s.dataMux = datasource.NewQueryTypeMux()
+	}
+
 	s.scenarios[scenario.ID] = scenario
-	s.queryMux.HandleFunc(scenario.ID, scenario.handler)
+	s.dataMux.HandleFunc(scenario.ID, scenario.handler)
 }
 
 // handleFallbackScenario handles the scenario where queryType is not set and fallbacks to scenarioId.

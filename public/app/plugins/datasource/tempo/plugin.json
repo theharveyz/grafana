@@ -4,6 +4,7 @@
   "id": "tempo",
   "category": "tracing",
 
+  "backend": true,
   "metrics": true,
   "alerting": false,
   "annotations": false,

@@ -25,13 +25,15 @@ const resourceManagerPath = "/v1/projects"
 
 type processResponse func(body []byte) ([]json.RawMessage, string, error)
 
-func (s *Service) registerRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/gceDefaultProject", getGCEDefaultProject)
-
-	mux.HandleFunc("/metricDescriptors/", s.resourceHandler(cloudMonitor, processMetricDescriptors))
-	mux.HandleFunc("/services/", s.resourceHandler(cloudMonitor, processServices))
-	mux.HandleFunc("/slo-services/", s.resourceHandler(cloudMonitor, processSLOs))
-	mux.HandleFunc("/projects", s.resourceHandler(resourceManager, processProjects))
+func (s *Service) registerResourceRoutes() {
+	if s.resourceMux == nil {
+		s.resourceMux = http.NewServeMux()
+	}
+	s.resourceMux.HandleFunc("/gceDefaultProject", getGCEDefaultProject)
+	s.resourceMux.HandleFunc("/metricDescriptors/", s.resourceHandler(cloudMonitor, processMetricDescriptors))
+	s.resourceMux.HandleFunc("/services/", s.resourceHandler(cloudMonitor, processServices))
+	s.resourceMux.HandleFunc("/slo-services/", s.resourceHandler(cloudMonitor, processSLOs))
+	s.resourceMux.HandleFunc("/projects", s.resourceHandler(resourceManager, processProjects))
 }
 
 func getGCEDefaultProject(rw http.ResponseWriter, req *http.Request) {

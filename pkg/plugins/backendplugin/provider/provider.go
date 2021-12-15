@@ -11,14 +11,18 @@ import (
 	"github.com/grafana/grafana/pkg/plugins/backendplugin/pluginextensionv2"
 )
 
-type Service struct{}
-
-func ProvideService() *Service {
-	return &Service{}
+type Service struct {
+	coreRegistry *CoreRegistry
 }
 
-func (*Service) BackendFactory(ctx context.Context, p *plugins.Plugin) backendplugin.PluginFactoryFunc {
-	for _, provider := range []PluginBackendProvider{RendererProvider, DefaultProvider} {
+func ProvideService(coreRegistry *CoreRegistry) *Service {
+	return &Service{
+		coreRegistry: coreRegistry,
+	}
+}
+
+func (s *Service) BackendFactory(ctx context.Context, p *plugins.Plugin) backendplugin.PluginFactoryFunc {
+	for _, provider := range []PluginBackendProvider{CorePluginProvider(ctx, s), RendererProvider, DefaultProvider} {
 		if factory := provider(ctx, p); factory != nil {
 			return factory
 		}
@@ -45,4 +49,14 @@ var RendererProvider PluginBackendProvider = func(_ context.Context, p *plugins.
 var DefaultProvider PluginBackendProvider = func(_ context.Context, p *plugins.Plugin) backendplugin.PluginFactoryFunc {
 	cmd := plugins.ComposePluginStartCommand(p.Executable)
 	return grpcplugin.NewBackendPlugin(p.ID, filepath.Join(p.PluginDir, cmd))
+}
+
+var CorePluginProvider = func(ctx context.Context, s *Service) PluginBackendProvider {
+	return func(_ context.Context, p *plugins.Plugin) backendplugin.PluginFactoryFunc {
+		if !p.IsCorePlugin() {
+			return nil
+		}
+
+		return s.coreRegistry.Get(p.ID)
+	}
 }

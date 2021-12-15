@@ -9,6 +9,7 @@
     { "type": "dashboard", "name": "Metrictank (Graphite alternative)", "path": "dashboards/metrictank.json" }
   ],
 
+  "backend": true,
   "metrics": true,
   "alerting": true,
   "annotations": true,

@@ -18,6 +18,7 @@
     "links": [{ "name": "Learn more", "url": "https://grafana.com/docs/features/datasources/elasticsearch/" }]
   },
 
+  "backend": true,
   "alerting": true,
   "annotations": true,
   "metrics": true,

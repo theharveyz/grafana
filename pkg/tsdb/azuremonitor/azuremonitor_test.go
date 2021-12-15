@@ -142,8 +142,8 @@ func Test_newMux(t *testing.T) {
 					},
 				},
 			}
-			mux := s.newMux()
-			res, err := mux.QueryData(context.TODO(), &backend.QueryDataRequest{
+			s.registerDataRoutes()
+			res, err := s.dataMux.QueryData(context.TODO(), &backend.QueryDataRequest{
 				PluginContext: backend.PluginContext{},
 				Queries: []backend.DataQuery{
 					{QueryType: tt.queryType},

@@ -9,18 +9,16 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/resource/httpadapter"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
+
 	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/plugins"
-	"github.com/grafana/grafana/pkg/plugins/backendplugin/coreplugin"
 	"github.com/grafana/grafana/pkg/setting"
 )
 
-const pluginID = "testdata"
-
-func ProvideService(cfg *setting.Cfg, pluginStore plugins.Store) (*Service, error) {
+func ProvideService(cfg *setting.Cfg) (*Service, error) {
 	s := &Service{
-		queryMux:  datasource.NewQueryTypeMux(),
-		scenarios: map[string]*Scenario{},
+		dataMux:     datasource.NewQueryTypeMux(),
+		resourceMux: http.NewServeMux(),
+		scenarios:   map[string]*Scenario{},
 		frame: data.NewFrame("testdata",
 			data.NewField("Time", nil, make([]time.Time, 1)),
 			data.NewField("Value", nil, make([]float64, 1)),
@@ -36,30 +34,26 @@ func ProvideService(cfg *setting.Cfg, pluginStore plugins.Store) (*Service, erro
 		cfg:    cfg,
 	}
 
-	s.registerScenarios()
-
-	rMux := http.NewServeMux()
-	s.RegisterRoutes(rMux)
-
-	factory := coreplugin.New(backend.ServeOpts{
-		QueryDataHandler:    s.queryMux,
-		CallResourceHandler: httpadapter.New(rMux),
-		StreamHandler:       s,
-	})
-	resolver := plugins.CoreDataSourcePathResolver(cfg, pluginID)
-	err := pluginStore.AddWithFactory(context.Background(), pluginID, factory, resolver)
-	if err != nil {
-		return nil, err
-	}
+	s.registerResourceRoutes()
+	s.registerDataRoutes()
 
 	return s, nil
 }
 
 type Service struct {
-	cfg        *setting.Cfg
-	logger     log.Logger
-	scenarios  map[string]*Scenario
-	frame      *data.Frame
-	labelFrame *data.Frame
-	queryMux   *datasource.QueryTypeMux
+	cfg         *setting.Cfg
+	logger      log.Logger
+	scenarios   map[string]*Scenario
+	frame       *data.Frame
+	labelFrame  *data.Frame
+	dataMux     *datasource.QueryTypeMux
+	resourceMux *http.ServeMux
+}
+
+func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	return s.dataMux.QueryData(ctx, req)
+}
+
+func (s *Service) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
+	return httpadapter.New(s.resourceMux).CallResource(ctx, req, sender)
 }

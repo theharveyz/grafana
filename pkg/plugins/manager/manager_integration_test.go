@@ -6,6 +6,22 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/grafana/grafana/pkg/tsdb/azuremonitor"
+	"github.com/grafana/grafana/pkg/tsdb/cloudmonitoring"
+	"github.com/grafana/grafana/pkg/tsdb/cloudwatch"
+	"github.com/grafana/grafana/pkg/tsdb/elasticsearch"
+	"github.com/grafana/grafana/pkg/tsdb/grafanads"
+	"github.com/grafana/grafana/pkg/tsdb/graphite"
+	"github.com/grafana/grafana/pkg/tsdb/influxdb"
+	"github.com/grafana/grafana/pkg/tsdb/loki"
+	"github.com/grafana/grafana/pkg/tsdb/mssql"
+	"github.com/grafana/grafana/pkg/tsdb/mysql"
+	"github.com/grafana/grafana/pkg/tsdb/opentsdb"
+	"github.com/grafana/grafana/pkg/tsdb/postgres"
+	"github.com/grafana/grafana/pkg/tsdb/prometheus"
+	"github.com/grafana/grafana/pkg/tsdb/tempo"
+	"github.com/grafana/grafana/pkg/tsdb/testdatasource"
+
 	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/plugins/backendplugin/provider"
 	"github.com/grafana/grafana/pkg/plugins/manager/loader"
@@ -44,8 +60,13 @@ func TestPluginManager_int_init(t *testing.T) {
 		Cfg: cfg,
 	}
 
+	coreRegistry := provider.ProvideCoreRegistry(&azuremonitor.Service{}, &cloudwatch.CloudWatchService{},
+		&cloudmonitoring.Service{}, &elasticsearch.Service{}, &graphite.Service{}, &influxdb.Service{}, &loki.Service{},
+		&opentsdb.Service{}, &prometheus.Service{}, &tempo.Service{}, &testdatasource.Service{}, &postgres.Service{},
+		&mysql.Service{}, &mssql.Service{}, &grafanads.Service{})
+
 	pm, err := ProvideService(cfg, nil, loader.New(cfg, license,
-		&signature.UnsignedPluginAuthorizer{Cfg: cfg}, &provider.Service{}), nil)
+		&signature.UnsignedPluginAuthorizer{Cfg: cfg}, provider.ProvideService(coreRegistry)), nil)
 	require.NoError(t, err)
 
 	verifyCorePluginCatalogue(t, pm)
@@ -91,12 +112,27 @@ func verifyCorePluginCatalogue(t *testing.T, pm *PluginManager) {
 	}
 
 	expDataSources := map[string]struct{}{
-		"alertmanager": {},
-		"dashboard":    {},
-		"input":        {},
-		"jaeger":       {},
-		"mixed":        {},
-		"zipkin":       {},
+		"alertmanager":                     {},
+		"dashboard":                        {},
+		"input":                            {},
+		"jaeger":                           {},
+		"mixed":                            {},
+		"zipkin":                           {},
+		"cloudwatch":                       {},
+		"stackdriver":                      {},
+		"grafana-azure-monitor-datasource": {},
+		"elasticsearch":                    {},
+		"graphite":                         {},
+		"influxdb":                         {},
+		"loki":                             {},
+		"opentsdb":                         {},
+		"prometheus":                       {},
+		"tempo":                            {},
+		"testdata":                         {},
+		"postgres":                         {},
+		"mysql":                            {},
+		"mssql":                            {},
+		"grafana":                          {},
 	}
 
 	expApps := map[string]struct{}{
@@ -119,7 +155,7 @@ func verifyCorePluginCatalogue(t *testing.T, pm *PluginManager) {
 		p, exists := pm.Plugin(context.Background(), ds.ID)
 		require.NotEqual(t, plugins.PluginDTO{}, p)
 		assert.True(t, exists)
-		assert.Contains(t, expDataSources, ds.ID)
+		require.Contains(t, expDataSources, ds.ID)
 		assert.Contains(t, pm.registeredPlugins(), ds.ID)
 	}
 

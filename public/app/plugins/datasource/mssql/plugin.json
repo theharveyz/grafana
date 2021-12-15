@@ -16,6 +16,7 @@
     }
   },
 
+  "backend": true,
   "alerting": true,
   "annotations": true,
   "metrics": true,

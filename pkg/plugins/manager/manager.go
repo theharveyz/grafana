@@ -389,7 +389,7 @@ func (m *PluginManager) unregisterAndStop(ctx context.Context, p *plugins.Plugin
 
 // start starts a backend plugin process
 func (m *PluginManager) start(ctx context.Context, p *plugins.Plugin) error {
-	if !p.IsManaged() || !p.Backend || p.SignatureError != nil {
+	if !p.IsManaged() {
 		return nil
 	}
 
@@ -471,17 +471,10 @@ func (m *PluginManager) shutdown(ctx context.Context) {
 
 // corePluginPaths provides a list of the Core plugin paths which need to be scanned on init()
 func corePluginPaths(cfg *setting.Cfg) []string {
-	datasourcePaths := []string{
-		filepath.Join(cfg.StaticRootPath, "app/plugins/datasource/alertmanager"),
-		filepath.Join(cfg.StaticRootPath, "app/plugins/datasource/dashboard"),
-		filepath.Join(cfg.StaticRootPath, "app/plugins/datasource/jaeger"),
-		filepath.Join(cfg.StaticRootPath, "app/plugins/datasource/mixed"),
-		filepath.Join(cfg.StaticRootPath, "app/plugins/datasource/zipkin"),
-	}
-
+	datasourcePath := filepath.Join(cfg.StaticRootPath, "app/plugins/datasource")
 	panelsPath := filepath.Join(cfg.StaticRootPath, "app/plugins/panel")
 
-	return append(datasourcePaths, panelsPath)
+	return []string{datasourcePath, panelsPath}
 }
 
 // pluginSettingPaths provides a plugin paths defined in cfg.PluginSettings which need to be scanned on init()

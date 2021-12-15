@@ -62,6 +62,7 @@
       "path": "dashboards/grafana_stats.json"
     }
   ],
+  "backend": true,
   "metrics": true,
   "alerting": true,
   "annotations": true,

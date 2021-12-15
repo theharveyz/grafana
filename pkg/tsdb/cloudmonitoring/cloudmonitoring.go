@@ -24,10 +24,6 @@ import (
 
 	"github.com/grafana/grafana/pkg/infra/httpclient"
 	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/plugins"
-	"github.com/grafana/grafana/pkg/plugins/backendplugin/coreplugin"
-	"github.com/grafana/grafana/pkg/services/datasources"
-
 	"github.com/grafana/grafana/pkg/setting"
 )
 
@@ -60,8 +56,6 @@ var (
 )
 
 const (
-	pluginID string = "stackdriver"
-
 	gceAuthentication         string = "gce"
 	jwtAuthentication         string = "jwt"
 	metricQueryType           string = "metrics"
@@ -71,27 +65,13 @@ const (
 	perSeriesAlignerDefault   string = "ALIGN_MEAN"
 )
 
-func ProvideService(cfg *setting.Cfg, httpClientProvider httpclient.Provider, pluginStore plugins.Store,
-	dsService *datasources.Service) *Service {
+func ProvideService(httpClientProvider httpclient.Provider) *Service {
 	s := &Service{
-		httpClientProvider: httpClientProvider,
-		cfg:                cfg,
-		im:                 datasource.NewInstanceManager(newInstanceSettings(httpClientProvider)),
-		dsService:          dsService,
+		resourceMux: http.NewServeMux(),
+		im:          datasource.NewInstanceManager(newInstanceSettings(httpClientProvider)),
 	}
+	s.registerResourceRoutes()
 
-	mux := http.NewServeMux()
-	s.registerRoutes(mux)
-	factory := coreplugin.New(backend.ServeOpts{
-		QueryDataHandler:    s,
-		CallResourceHandler: httpadapter.New(mux),
-		CheckHealthHandler:  s,
-	})
-
-	resolver := plugins.CoreDataSourcePathResolver(cfg, pluginID)
-	if err := pluginStore.AddWithFactory(context.Background(), pluginID, factory, resolver); err != nil {
-		slog.Error("Failed to register plugin", "error", err)
-	}
 	return s
 }
 
@@ -135,10 +115,8 @@ func (s *Service) CheckHealth(ctx context.Context, req *backend.CheckHealthReque
 }
 
 type Service struct {
-	httpClientProvider httpclient.Provider
-	cfg                *setting.Cfg
-	im                 instancemgmt.InstanceManager
-	dsService          *datasources.Service
+	im          instancemgmt.InstanceManager
+	resourceMux *http.ServeMux
 }
 
 type QueryModel struct {
@@ -221,6 +199,10 @@ func newInstanceSettings(httpClientProvider httpclient.Provider) datasource.Inst
 
 		return dsInfo, nil
 	}
+}
+
+func (s *Service) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
+	return httpadapter.New(s.resourceMux).CallResource(ctx, req, sender)
 }
 
 // QueryData takes in the frontend queries, parses them into the CloudMonitoring query format

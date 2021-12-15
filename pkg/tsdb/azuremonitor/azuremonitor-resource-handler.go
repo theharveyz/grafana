@@ -114,12 +114,3 @@ func (s *Service) resourceHandler(subDataSource string) func(rw http.ResponseWri
 		s.executors[subDataSource].resourceRequest(rw, req, service.HTTPClient)
 	}
 }
-
-// registerRoutes provides route definitions shared with the frontend.
-// Check: /public/app/plugins/datasource/grafana-azure-monitor-datasource/utils/common.ts <routeNames>
-func (s *Service) registerRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/azuremonitor/", s.resourceHandler(azureMonitor))
-	mux.HandleFunc("/appinsights/", s.resourceHandler(appInsights))
-	mux.HandleFunc("/loganalytics/", s.resourceHandler(azureLogAnalytics))
-	mux.HandleFunc("/resourcegraph/", s.resourceHandler(azureResourceGraph))
-}

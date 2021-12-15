@@ -49,6 +49,7 @@
     "plugins": []
   },
 
+  "backend": true,
   "metrics": true,
   "annotations": true,
   "alerting": true

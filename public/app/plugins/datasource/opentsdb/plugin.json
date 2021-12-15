@@ -4,6 +4,7 @@
   "id": "opentsdb",
   "category": "tsdb",
 
+  "backend": true,
   "metrics": true,
   "defaultMatchFormat": "pipe",
   "annotations": true,

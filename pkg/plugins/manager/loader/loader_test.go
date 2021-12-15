@@ -81,6 +81,7 @@ func TestLoader_Load(t *testing.T) {
 							Plugins:        []plugins.Dependency{},
 						},
 						Category:     "cloud",
+						Backend:      true,
 						Annotations:  true,
 						Metrics:      true,
 						Alerting:     true,
@@ -859,7 +860,7 @@ func newLoader(cfg *setting.Cfg) *Loader {
 	return &Loader{
 		cfg:                cfg,
 		pluginFinder:       finder.New(cfg),
-		pluginInitializer:  initializer.New(cfg, &provider.Service{}, &fakeLicensingService{}),
+		pluginInitializer:  initializer.New(cfg, provider.ProvideService(&provider.CoreRegistry{}), &fakeLicensingService{}),
 		signatureValidator: signature.NewValidator(&signature.UnsignedPluginAuthorizer{Cfg: cfg}),
 		errs:               make(map[string]*plugins.SignatureError),
 		log:                &fakeLogger{},
