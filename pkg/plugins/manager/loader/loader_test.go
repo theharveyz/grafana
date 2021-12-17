@@ -39,7 +39,7 @@ func TestLoader_Load(t *testing.T) {
 	tests := []struct {
 		name            string
 		class           plugins.Class
-		cfg             *setting.Cfg
+		cfg             *plugins.Cfg
 		pluginPaths     []string
 		existingPlugins map[string]struct{}
 		want            []*plugins.Plugin
@@ -48,8 +48,8 @@ func TestLoader_Load(t *testing.T) {
 		{
 			name:  "Load a Core plugin",
 			class: plugins.Core,
-			cfg: &setting.Cfg{
-				StaticRootPath: corePluginDir,
+			cfg: &plugins.Cfg{
+				PluginsPath: corePluginDir,
 			},
 			pluginPaths: []string{filepath.Join(corePluginDir, "app/plugins/datasource/cloudwatch")},
 			want: []*plugins.Plugin{
@@ -99,8 +99,8 @@ func TestLoader_Load(t *testing.T) {
 		{
 			name:  "Load a Bundled plugin",
 			class: plugins.Bundled,
-			cfg: &setting.Cfg{
-				BundledPluginsPath: filepath.Join(parentDir, "testdata"),
+			cfg: &plugins.Cfg{
+				PluginsPath: filepath.Join(parentDir, "testdata"),
 			},
 			pluginPaths: []string{"../testdata/valid-v2-signature"},
 			want: []*plugins.Plugin{
@@ -141,7 +141,7 @@ func TestLoader_Load(t *testing.T) {
 		}, {
 			name:  "Load plugin with symbolic links",
 			class: plugins.External,
-			cfg: &setting.Cfg{
+			cfg: &plugins.Cfg{
 				PluginsPath: filepath.Join(parentDir),
 			},
 			pluginPaths: []string{"../testdata/symbolic-plugin-dirs"},
@@ -219,9 +219,8 @@ func TestLoader_Load(t *testing.T) {
 		}, {
 			name:  "Load an unsigned plugin (development)",
 			class: plugins.External,
-			cfg: &setting.Cfg{
+			cfg: &plugins.Cfg{
 				PluginsPath: filepath.Join(parentDir),
-				Env:         "development",
 			},
 			pluginPaths: []string{"../testdata/unsigned-datasource"},
 			want: []*plugins.Plugin{
@@ -258,9 +257,8 @@ func TestLoader_Load(t *testing.T) {
 		}, {
 			name:  "Load an unsigned plugin (production)",
 			class: plugins.External,
-			cfg: &setting.Cfg{
+			cfg: &plugins.Cfg{
 				PluginsPath: filepath.Join(parentDir),
-				Env:         "production",
 			},
 			pluginPaths: []string{"../testdata/unsigned-datasource"},
 			want:        []*plugins.Plugin{},
@@ -274,9 +272,8 @@ func TestLoader_Load(t *testing.T) {
 		{
 			name:  "Load an unsigned plugin using PluginsAllowUnsigned config (production)",
 			class: plugins.External,
-			cfg: &setting.Cfg{
+			cfg: &plugins.Cfg{
 				PluginsPath:          filepath.Join(parentDir),
-				Env:                  "production",
 				PluginsAllowUnsigned: []string{"test"},
 			},
 			pluginPaths: []string{"../testdata/unsigned-datasource"},
@@ -315,9 +312,8 @@ func TestLoader_Load(t *testing.T) {
 		{
 			name:  "Load an unsigned plugin with modified signature (production)",
 			class: plugins.External,
-			cfg: &setting.Cfg{
+			cfg: &plugins.Cfg{
 				PluginsPath: filepath.Join(parentDir),
-				Env:         "production",
 			},
 			pluginPaths: []string{"../testdata/lacking-files"},
 			want:        []*plugins.Plugin{},
@@ -331,9 +327,8 @@ func TestLoader_Load(t *testing.T) {
 		{
 			name:  "Load an unsigned plugin with modified signature using PluginsAllowUnsigned config (production) still includes a signing error",
 			class: plugins.External,
-			cfg: &setting.Cfg{
+			cfg: &plugins.Cfg{
 				PluginsPath:          filepath.Join(parentDir),
-				Env:                  "production",
 				PluginsAllowUnsigned: []string{"test"},
 			},
 			pluginPaths: []string{"../testdata/lacking-files"},
@@ -374,7 +369,7 @@ func TestLoader_Load_MultiplePlugins(t *testing.T) {
 	t.Run("Load multiple", func(t *testing.T) {
 		tests := []struct {
 			name            string
-			cfg             *setting.Cfg
+			cfg             *plugins.Cfg
 			pluginPaths     []string
 			appURL          string
 			existingPlugins map[string]struct{}
@@ -383,8 +378,7 @@ func TestLoader_Load_MultiplePlugins(t *testing.T) {
 		}{
 			{
 				name: "Load multiple plugins (broken, valid, unsigned)",
-				cfg: &setting.Cfg{
-					Env:         "production",
+				cfg: &plugins.Cfg{
 					PluginsPath: filepath.Join(parentDir),
 				},
 				appURL: "http://localhost:3000",
@@ -509,7 +503,7 @@ func TestLoader_Signature_RootURL(t *testing.T) {
 			},
 		}
 
-		l := newLoader(&setting.Cfg{PluginsPath: filepath.Join(parentDir)})
+		l := newLoader(&plugins.Cfg{PluginsPath: filepath.Join(parentDir)})
 		got, err := l.Load(context.Background(), plugins.External, paths, map[string]struct{}{})
 		assert.NoError(t, err)
 
@@ -578,7 +572,7 @@ func TestLoader_Load_DuplicatePlugins(t *testing.T) {
 			},
 		}
 
-		l := newLoader(&setting.Cfg{
+		l := newLoader(&plugins.Cfg{
 			PluginsPath: filepath.Dir(pluginDir),
 		})
 
@@ -667,7 +661,7 @@ func TestLoader_loadNestedPlugins(t *testing.T) {
 
 	t.Run("Load nested External plugins", func(t *testing.T) {
 		expected := []*plugins.Plugin{parent, child}
-		l := newLoader(&setting.Cfg{
+		l := newLoader(&plugins.Cfg{
 			PluginsPath: parentDir,
 		})
 
@@ -689,7 +683,7 @@ func TestLoader_loadNestedPlugins(t *testing.T) {
 		parent.Children = nil
 		expected := []*plugins.Plugin{parent}
 
-		l := newLoader(&setting.Cfg{
+		l := newLoader(&plugins.Cfg{
 			PluginsPath: parentDir,
 		})
 
@@ -856,10 +850,10 @@ func Test_setPathsBasedOnApp(t *testing.T) {
 	})
 }
 
-func newLoader(cfg *setting.Cfg) *Loader {
+func newLoader(cfg *plugins.Cfg) *Loader {
 	return &Loader{
 		cfg:                cfg,
-		pluginFinder:       finder.New(cfg),
+		pluginFinder:       finder.New(),
 		pluginInitializer:  initializer.New(cfg, provider.ProvideService(&provider.CoreRegistry{}), &fakeLicensingService{}),
 		signatureValidator: signature.NewValidator(&signature.UnsignedPluginAuthorizer{Cfg: cfg}),
 		errs:               make(map[string]*plugins.SignatureError),
