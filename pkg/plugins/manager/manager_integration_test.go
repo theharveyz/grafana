@@ -6,6 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/grafana/grafana/pkg/plugins"
+	"github.com/grafana/grafana/pkg/plugins/backendplugin/provider"
+	"github.com/grafana/grafana/pkg/plugins/manager/loader"
+	"github.com/grafana/grafana/pkg/plugins/manager/signature"
+	"github.com/grafana/grafana/pkg/services/licensing"
+	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/tsdb/azuremonitor"
 	"github.com/grafana/grafana/pkg/tsdb/cloudmonitoring"
 	"github.com/grafana/grafana/pkg/tsdb/cloudwatch"
@@ -21,13 +27,6 @@ import (
 	"github.com/grafana/grafana/pkg/tsdb/prometheus"
 	"github.com/grafana/grafana/pkg/tsdb/tempo"
 	"github.com/grafana/grafana/pkg/tsdb/testdatasource"
-
-	"github.com/grafana/grafana/pkg/plugins"
-	"github.com/grafana/grafana/pkg/plugins/backendplugin/provider"
-	"github.com/grafana/grafana/pkg/plugins/manager/loader"
-	"github.com/grafana/grafana/pkg/plugins/manager/signature"
-	"github.com/grafana/grafana/pkg/services/licensing"
-	"github.com/grafana/grafana/pkg/setting"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -60,13 +59,14 @@ func TestPluginManager_int_init(t *testing.T) {
 		Cfg: cfg,
 	}
 
+	pmCfg := plugins.FromGrafanaCfg(cfg)
 	coreRegistry := provider.ProvideCoreRegistry(&azuremonitor.Service{}, &cloudwatch.CloudWatchService{},
 		&cloudmonitoring.Service{}, &elasticsearch.Service{}, &graphite.Service{}, &influxdb.Service{}, &loki.Service{},
 		&opentsdb.Service{}, &prometheus.Service{}, &tempo.Service{}, &testdatasource.Service{}, &postgres.Service{},
 		&mysql.Service{}, &mssql.Service{}, &grafanads.Service{})
 
-	pm, err := ProvideService(cfg, nil, loader.New(cfg, license,
-		&signature.UnsignedPluginAuthorizer{Cfg: cfg}, provider.ProvideService(coreRegistry)), nil)
+	pm, err := ProvideService(cfg, nil, loader.New(pmCfg, license,
+		&signature.UnsignedPluginAuthorizer{Cfg: pmCfg}, provider.ProvideService(coreRegistry)), nil)
 	require.NoError(t, err)
 
 	verifyCorePluginCatalogue(t, pm)
