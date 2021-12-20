@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/grafana/grafana/pkg/bus"
+	"github.com/grafana/grafana/pkg/infra/tracing"
 	"github.com/grafana/grafana/pkg/models"
 
 	"github.com/stretchr/testify/require"
@@ -36,7 +37,9 @@ func TestUpdateTeam(t *testing.T) {
 					return nil
 				})
 
-				err := CanAdmin(context.Background(), bus.GetBus(), testTeam.OrgId, testTeam.Id, &editor)
+				err := tracing.InitializeTracerForTest()
+				require.NoError(t, err)
+				err = CanAdmin(context.Background(), bus.GetBus(), testTeam.OrgId, testTeam.Id, &editor)
 				require.Equal(t, models.ErrNotAllowedToUpdateTeam, err)
 			})
 		})
