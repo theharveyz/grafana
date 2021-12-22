@@ -23,6 +23,7 @@ type EmailNotifier struct {
 	Message     string
 	log         log.Logger
 	tmpl        *template.Template
+	bus         bus.Bus
 }
 
 // NewEmailNotifier is the constructor function
@@ -55,6 +56,7 @@ func NewEmailNotifier(model *NotificationChannelConfig, t *template.Template) (*
 		Message:     model.Settings.Get("message").MustString(),
 		log:         log.New("alerting.notifier.email"),
 		tmpl:        t,
+		bus:         bus.ProvideBus(),
 	}, nil
 }
 
@@ -78,32 +80,30 @@ func (en *EmailNotifier) Notify(ctx context.Context, as ...*types.Alert) (bool, 
 		en.log.Debug("failed to parse external URL", "url", en.tmpl.ExternalURL.String(), "err", err.Error())
 	}
 
-	cmd := &models.SendEmailCommandSync{
-		SendEmailCommand: models.SendEmailCommand{
-			Subject: title,
-			Data: map[string]interface{}{
-				"Title":             title,
-				"Message":           tmpl(en.Message),
-				"Status":            data.Status,
-				"Alerts":            data.Alerts,
-				"GroupLabels":       data.GroupLabels,
-				"CommonLabels":      data.CommonLabels,
-				"CommonAnnotations": data.CommonAnnotations,
-				"ExternalURL":       data.ExternalURL,
-				"RuleUrl":           ruleURL,
-				"AlertPageUrl":      alertPageURL,
-			},
-			To:          en.Addresses,
-			SingleEmail: en.SingleEmail,
-			Template:    "ng_alert_notification",
+	cmd := &models.SendEmailCommand{
+		Subject: title,
+		Data: map[string]interface{}{
+			"Title":             title,
+			"Message":           tmpl(en.Message),
+			"Status":            data.Status,
+			"Alerts":            data.Alerts,
+			"GroupLabels":       data.GroupLabels,
+			"CommonLabels":      data.CommonLabels,
+			"CommonAnnotations": data.CommonAnnotations,
+			"ExternalURL":       data.ExternalURL,
+			"RuleUrl":           ruleURL,
+			"AlertPageUrl":      alertPageURL,
 		},
+		To:          en.Addresses,
+		SingleEmail: en.SingleEmail,
+		Template:    "ng_alert_notification",
 	}
 
 	if tmplErr != nil {
 		en.log.Debug("failed to template email message", "err", tmplErr.Error())
 	}
 
-	if err := bus.DispatchCtx(ctx, cmd); err != nil {
+	if err := en.bus.DispatchCtx(ctx, cmd); err != nil {
 		return false, err
 	}
 

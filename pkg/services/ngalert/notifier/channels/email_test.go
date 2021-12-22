@@ -2,6 +2,7 @@ package channels
 
 import (
 	"context"
+	"io/ioutil"
 	"net/url"
 	"testing"
 
@@ -13,6 +14,8 @@ import (
 	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/components/simplejson"
 	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/services/notifications"
+	"github.com/grafana/grafana/pkg/setting"
 )
 
 func TestEmailNotifier(t *testing.T) {
@@ -53,12 +56,12 @@ func TestEmailNotifier(t *testing.T) {
 		require.NoError(t, err)
 
 		expected := map[string]interface{}{}
-		bus.AddHandlerCtx("test", func(ctx context.Context, cmd *models.SendEmailCommandSync) error {
-			expected["subject"] = cmd.SendEmailCommand.Subject
-			expected["to"] = cmd.SendEmailCommand.To
-			expected["single_email"] = cmd.SendEmailCommand.SingleEmail
-			expected["template"] = cmd.SendEmailCommand.Template
-			expected["data"] = cmd.SendEmailCommand.Data
+		bus.AddHandlerCtx("test", func(ctx context.Context, cmd *models.SendEmailCommand) error {
+			expected["subject"] = cmd.Subject
+			expected["to"] = cmd.To
+			expected["single_email"] = cmd.SingleEmail
+			expected["template"] = cmd.Template
+			expected["data"] = cmd.Data
 
 			return nil
 		})
@@ -105,4 +108,197 @@ func TestEmailNotifier(t *testing.T) {
 			},
 		}, expected)
 	})
+}
+
+func TestEmailNotifierIntegration(t *testing.T) {
+	ns, bus := createCoreEmailService(t)
+
+	emailTmpl := templateForTests(t)
+	externalURL, err := url.Parse("http://localhost/base")
+	require.NoError(t, err)
+	emailTmpl.ExternalURL = externalURL
+
+	cases := []struct {
+		name        string
+		alerts      []*types.Alert
+		messageTmpl string
+		expSubject  string
+		expSnippets []string
+	}{
+		{
+			name: "single alert with templated message",
+			alerts: []*types.Alert{
+				{
+					Alert: model.Alert{
+						Labels:      model.LabelSet{"alertname": "AlwaysFiring", "severity": "warning"},
+						Annotations: model.LabelSet{"runbook_url": "http://fix.me", "__dashboardUid__": "abc", "__panelId__": "5"},
+					},
+				},
+			},
+			messageTmpl: `Hi, this is a custom template.
+				{{ if gt (len .Alerts.Firing) 0 }}
+					You have {{ len .Alerts.Firing }} alerts firing.
+					{{ range .Alerts.Firing }} Firing: {{ .Labels.alertname }} at {{ .Labels.severity }} {{ end }}
+				{{ end }}`,
+			expSubject: "[FIRING:1]  (AlwaysFiring warning)",
+			expSnippets: []string{
+				"Hi, this is a custom template.",
+				"You have 1 alerts firing.",
+				"Firing: AlwaysFiring at warning",
+			},
+		},
+		{
+			name: "multiple alerts with templated message",
+			alerts: []*types.Alert{
+				{
+					Alert: model.Alert{
+						Labels:      model.LabelSet{"alertname": "FiringOne", "severity": "warning"},
+						Annotations: model.LabelSet{"runbook_url": "http://fix.me", "__dashboardUid__": "abc", "__panelId__": "5"},
+					},
+				},
+				{
+					Alert: model.Alert{
+						Labels:      model.LabelSet{"alertname": "FiringTwo", "severity": "critical"},
+						Annotations: model.LabelSet{"runbook_url": "http://fix.me", "__dashboardUid__": "abc", "__panelId__": "5"},
+					},
+				},
+			},
+			messageTmpl: `Hi, this is a custom template.
+				{{ if gt (len .Alerts.Firing) 0 }}
+					You have {{ len .Alerts.Firing }} alerts firing.
+					{{ range .Alerts.Firing }} Firing: {{ .Labels.alertname }} at {{ .Labels.severity }} {{ end }}
+				{{ end }}`,
+			expSubject: "[FIRING:2]  ",
+			expSnippets: []string{
+				"Hi, this is a custom template.",
+				"You have 2 alerts firing.",
+				"Firing: FiringOne at warning",
+				"Firing: FiringTwo at critical",
+			},
+		},
+		{
+			name: "empty message with alerts uses default template content",
+			alerts: []*types.Alert{
+				{
+					Alert: model.Alert{
+						Labels:      model.LabelSet{"alertname": "FiringOne", "severity": "warning"},
+						Annotations: model.LabelSet{"runbook_url": "http://fix.me", "__dashboardUid__": "abc", "__panelId__": "5"},
+					},
+				},
+				{
+					Alert: model.Alert{
+						Labels:      model.LabelSet{"alertname": "FiringTwo", "severity": "critical"},
+						Annotations: model.LabelSet{"runbook_url": "http://fix.me", "__dashboardUid__": "abc", "__panelId__": "5"},
+					},
+				},
+			},
+			messageTmpl: "",
+			expSubject:  "[FIRING:2]  ",
+			expSnippets: []string{
+				"Firing: 2 alerts",
+				"<li>alertname: FiringOne</li><li>severity: warning</li>",
+				"<li>alertname: FiringTwo</li><li>severity: critical</li>",
+				"<a href=\"http://fix.me\"",
+				"<a href=\"http://localhost/base/d/abc",
+				"<a href=\"http://localhost/base/d/abc?viewPanel=5",
+			},
+		},
+		{
+			name: "message containing HTML gets HTMLencoded",
+			alerts: []*types.Alert{
+				{
+					Alert: model.Alert{
+						Labels:      model.LabelSet{"alertname": "AlwaysFiring", "severity": "warning"},
+						Annotations: model.LabelSet{"runbook_url": "http://fix.me", "__dashboardUid__": "abc", "__panelId__": "5"},
+					},
+				},
+			},
+			messageTmpl: `<marquee>Hi, this is a custom template.</marquee>
+				{{ if gt (len .Alerts.Firing) 0 }}
+					<ol>
+					{{range .Alerts.Firing }}<li>Firing: {{ .Labels.alertname }} at {{ .Labels.severity }} </li> {{ end }}
+					</ol>
+				{{ end }}`,
+			expSubject: "[FIRING:1]  (AlwaysFiring warning)",
+			expSnippets: []string{
+				"&lt;marquee&gt;Hi, this is a custom template.&lt;/marquee&gt;",
+				"&lt;li&gt;Firing: AlwaysFiring at warning &lt;/li&gt;",
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			emailNotifier := createSut(t, c.messageTmpl, emailTmpl, bus)
+
+			ok, err := emailNotifier.Notify(context.Background(), c.alerts...)
+			require.NoError(t, err)
+			require.True(t, ok)
+
+			sentMsg := ns.MailQueuePop()
+
+			require.NotNil(t, sentMsg)
+
+			require.Equal(t, "\"Grafana Admin\" <from@address.com>", sentMsg.From)
+			require.Equal(t, sentMsg.To[0], "someops@example.com")
+
+			require.Equal(t, c.expSubject, sentMsg.Subject)
+
+			require.Contains(t, sentMsg.Body, "text/html")
+			html := sentMsg.Body["text/html"]
+			require.NotNil(t, html)
+
+			for _, s := range c.expSnippets {
+				require.Contains(t, html, s)
+			}
+
+			err = ioutil.WriteFile("/tmp/test_email2.html", []byte(sentMsg.Body["text/html"]), 0777)
+			require.NoError(t, err)
+		})
+	}
+}
+
+func createCoreEmailService(t *testing.T) (*notifications.NotificationService, *bus.InProcBus) {
+	t.Helper()
+
+	setting.StaticRootPath = "../../../public/"
+	setting.BuildVersion = "4.0.0"
+
+	ns := &notifications.NotificationService{}
+	bus := bus.New()
+	cfg := setting.NewCfg()
+	cfg.Smtp.Enabled = true
+	cfg.Smtp.TemplatesPatterns = []string{"/home/alexweav/git/grafana/public/emails/*.html", "/home/alexweav/git/grafana/public/emails/*.txt"}
+	cfg.Smtp.FromAddress = "from@address.com"
+	cfg.Smtp.FromName = "Grafana Admin"
+	cfg.Smtp.ContentTypes = []string{"text/html", "text/plain"}
+	cfg.Smtp.Host = "localhost:1234"
+
+	ns, err := notifications.ProvideService(bus, cfg)
+	require.NoError(t, err)
+
+	return ns, bus
+}
+
+func createSut(t *testing.T, messageTmpl string, emailTmpl *template.Template, bus bus.Bus) *EmailNotifier {
+	t.Helper()
+
+	json := `{
+		"addresses": "someops@example.com;somedev@example.com"
+	}`
+	settingsJSON, err := simplejson.NewJson([]byte(json))
+	if messageTmpl != "" {
+		settingsJSON.Set("message", messageTmpl)
+	}
+	require.NoError(t, err)
+
+	emailNotifier, err := NewEmailNotifier(&NotificationChannelConfig{
+		Name:     "ops",
+		Type:     "email",
+		Settings: settingsJSON,
+	}, emailTmpl)
+	require.NoError(t, err)
+	emailNotifier.bus = bus
+
+	return emailNotifier
 }
