@@ -264,7 +264,7 @@ func createCoreEmailService(t *testing.T) (*notifications.NotificationService, *
 	bus := bus.New()
 	cfg := setting.NewCfg()
 	cfg.Smtp.Enabled = true
-	cfg.Smtp.TemplatesPatterns = []string{"/home/alexweav/git/grafana/public/emails/*.html", "/home/alexweav/git/grafana/public/emails/*.txt"}
+	cfg.Smtp.TemplatesPatterns = []string{"../../../../../public/emails/*.html", "../../../../../public/emails/*.txt"}
 	cfg.Smtp.FromAddress = "from@address.com"
 	cfg.Smtp.FromName = "Grafana Admin"
 	cfg.Smtp.ContentTypes = []string{"text/html", "text/plain"}
