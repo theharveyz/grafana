@@ -260,7 +260,6 @@ func createCoreEmailService(t *testing.T) (*notifications.NotificationService, *
 	setting.StaticRootPath = "../../../public/"
 	setting.BuildVersion = "4.0.0"
 
-	ns := &notifications.NotificationService{}
 	bus := bus.New()
 	cfg := setting.NewCfg()
 	cfg.Smtp.Enabled = true
