@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/grafana/grafana/pkg/bus"
-	"github.com/grafana/grafana/pkg/infra/tracing"
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/quota"
 	log "github.com/inconshreveable/log15"
@@ -37,9 +36,8 @@ func Test_syncOrgRoles_doesNotBreakWhenTryingToRemoveLastOrgAdmin(t *testing.T) 
 	bus.AddHandler("test", func(ctx context.Context, cmd *models.SetUsingOrgCommand) error {
 		return nil
 	})
-	err := tracing.InitializeTracerForTest()
-	require.NoError(t, err)
-	err = syncOrgRoles(context.Background(), &user, &externalUser)
+
+	err := syncOrgRoles(context.Background(), &user, &externalUser)
 	require.Empty(t, remResp)
 	require.NoError(t, err)
 }
@@ -89,7 +87,7 @@ func (a *authInfoServiceMock) LookupAndUpdate(ctx context.Context, query *models
 }
 
 func Test_teamSync(t *testing.T) {
-	b := bus.New()
+	b := bus.NewTest(t)
 	authInfoMock := &authInfoServiceMock{}
 	login := Implementation{
 		Bus:             b,
