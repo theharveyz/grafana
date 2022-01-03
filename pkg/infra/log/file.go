@@ -90,7 +90,6 @@ func (w *FileLogWriter) Init() error {
 	}
 	w.logger = log.NewLogfmtLogger(log.NewSyncWriter(w))
 	return nil
-
 }
 
 // start file logger. create log file and set to locker-inside file writer.
